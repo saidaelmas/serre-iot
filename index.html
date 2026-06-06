@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1b5e20">
+  <meta name="description" content="Surveillance IoT de serre connectée">
+  <title>🌱 Ma Serre Connectée</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌱</text></svg>">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --vert-fonce: #1b5e20;
+      --vert-moyen: #2e7d32;
+      --vert-clair: #66bb6a;
+      --vert-pale: #e8f5e9;
+      --orange: #ff7043;
+      --rouge: #e53935;
+      --bleu: #1e88e5;
+      --gris-sombre: #263238;
+      --gris-clair: #eceff1;
+      --bg: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--gris-sombre);
+      padding: 16px;
+      padding-bottom: 80px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* HEADER */
+    header {
+      background: var(--vert-fonce);
+      color: white;
+      padding: 20px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(27, 94, 32, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--vert-clair);
+      animation: pulse 2s infinite;
+    }
+
+    .dot.offline { background: var(--rouge); animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* CARTES DE DONNÉES */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: transform 0.2s;
+    }
+
+    .card:hover { transform: translateY(-2px); }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      color: #607d8b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+
+    .card-icon {
+      font-size: 28px;
+    }
+
+    .card-value {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .card-unit {
+      font-size: 18px;
+      color: #78909c;
+      margin-left: 4px;
+    }
+
+    .card-trend {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #607d8b;
+    }
+
+    /* Couleurs dynamiques selon état */
+    .temp .card-value { color: var(--vert-moyen); }
+    .temp.warning .card-value { color: var(--orange); }
+    .temp.danger .card-value { color: var(--rouge); }
+
+    .hum .card-value { color: var(--bleu); }
+    .hum.warning .card-value { color: var(--orange); }
+    .hum.danger .card-value { color: var(--rouge); }
+
+    /* ALERTE BANNER */
+    .alert-banner {
+      background: var(--rouge);
+      color: white;
+      padding: 14px 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      animation: shake 0.5s;
+    }
+
+    .alert-banner.show { display: flex; }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    /* GRAPHIQUE */
+    .chart-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      margin-bottom: 20px;
+    }
+
+    .chart-card h2 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      color: var(--vert-fonce);
+    }
+
+    .chart-container {
+      position: relative;
+      height: 280px;
+    }
+
+    /* CONFIG SECTION */
+    .config-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      margin-bottom: 20px;
+    }
+
+    .config-card h2 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      color: var(--vert-fonce);
+    }
+
+    .config-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #607d8b;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid var(--gris-clair);
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--vert-moyen);
+    }
+
+    .btn-save {
+      background: var(--vert-moyen);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+
+    .btn-save:hover { background: var(--vert-fonce); }
+
+    /* SETUP / CONFIG INITIALE */
+    .setup-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      margin-bottom: 20px;
+      border: 2px dashed var(--vert-clair);
+    }
+
+    .setup-card h2 {
+      color: var(--vert-fonce);
+      margin-bottom: 12px;
+    }
+
+    .setup-card p {
+      font-size: 14px;
+      color: #607d8b;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .install-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--vert-fonce);
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(27, 94, 32, 0.4);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .install-btn.show { display: flex; }
+
+    /* Responsive */
+    @media (max-width: 500px) {
+      header h1 { font-size: 18px; }
+      .card-value { font-size: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- HEADER -->
+    <header>
+      <h1>🌱 Ma Serre Connectée</h1>
+      <div class="status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Connexion...</span>
+      </div>
+    </header>
+
+    <!-- ALERTE -->
+    <div class="alert-banner" id="alertBanner">
+      <span style="font-size: 24px;">⚠️</span>
+      <span id="alertMessage">Alerte détectée</span>
+    </div>
+
+    <!-- SETUP INITIAL -->
+    <div class="setup-card" id="setupCard">
+      <h2>🔧 Configuration initiale</h2>
+      <p>Pour connecter ton ESP32, entre ton <strong>Auth Token Blynk</strong> (trouvable dans ton template Blynk Cloud → Devices → ton device → Info).</p>
+      <div class="input-group" style="margin-bottom: 12px;">
+        <label>Auth Token Blynk</label>
+        <input type="text" id="tokenInput" placeholder="Ex: AbCdEf12-3GhIjKlMn...">
+      </div>
+      <div class="input-group" style="margin-bottom: 12px;">
+        <label>Serveur Blynk (par défaut : blynk.cloud)</label>
+        <input type="text" id="serverInput" value="blynk.cloud" placeholder="blynk.cloud">
+      </div>
+      <button class="btn-save" onclick="saveConfig()">✅ Enregistrer et démarrer</button>
+    </div>
+
+    <!-- CARTES DE DONNÉES -->
+    <div class="cards" id="dataCards" style="display: none;">
+      <div class="card temp" id="cardTemp">
+        <div class="card-header">
+          <span class="card-title">Température</span>
+          <span class="card-icon">🌡️</span>
+        </div>
+        <div>
+          <span class="card-value" id="tempValue">--</span>
+          <span class="card-unit">°C</span>
+        </div>
+        <div class="card-trend" id="tempTrend">En attente de données...</div>
+      </div>
+
+      <div class="card hum" id="cardHum">
+        <div class="card-header">
+          <span class="card-title">Humidité</span>
+          <span class="card-icon">💧</span>
+        </div>
+        <div>
+          <span class="card-value" id="humValue">--</span>
+          <span class="card-unit">%</span>
+        </div>
+        <div class="card-trend" id="humTrend">En attente de données...</div>
+      </div>
+    </div>
+
+    <!-- GRAPHIQUE -->
+    <div class="chart-card" id="chartCard" style="display: none;">
+      <h2>📊 Historique (dernières mesures)</h2>
+      <div class="chart-container">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+
+    <!-- CONFIGURATION DES SEUILS -->
+    <div class="config-card" id="configCard" style="display: none;">
+      <h2>⚙️ Seuils d'alerte</h2>
+      <div class="config-row">
+        <div class="input-group">
+          <label>Temp. max (°C)</label>
+          <input type="number" id="tempMax" value="30">
+        </div>
+        <div class="input-group">
+          <label>Temp. min (°C)</label>
+          <input type="number" id="tempMin" value="10">
+        </div>
+      </div>
+      <div class="config-row">
+        <div class="input-group">
+          <label>Humidité max (%)</label>
+          <input type="number" id="humMax" value="80">
+        </div>
+        <div class="input-group">
+          <label>Humidité min (%)</label>
+          <input type="number" id="humMin" value="40">
+        </div>
+      </div>
+      <button class="btn-save" onclick="saveThresholds()">💾 Sauvegarder les seuils</button>
+    </div>
+
+  </div>
+
+  <button class="install-btn" id="installBtn" onclick="installPWA()">
+    📥 Installer l'app
+  </button>
+
+  <script>
+    // ===== CONFIGURATION =====
+    let config = {
+      token: localStorage.getItem('blynk_token') || '',
+      server: localStorage.getItem('blynk_server') || 'blynk.cloud',
+      thresholds: JSON.parse(localStorage.getItem('thresholds') || '{"tempMax":30,"tempMin":10,"humMax":80,"humMin":40}')
+    };
+
+    let chart;
+    let historyData = { labels: [], temp: [], hum: [] };
+    const MAX_POINTS = 20;
+    let updateInterval;
+
+    // ===== INITIALISATION =====
+    window.addEventListener('load', () => {
+      // Charger les seuils sauvegardés
+      document.getElementById('tempMax').value = config.thresholds.tempMax;
+      document.getElementById('tempMin').value = config.thresholds.tempMin;
+      document.getElementById('humMax').value = config.thresholds.humMax;
+      document.getElementById('humMin').value = config.thresholds.humMin;
+
+      if (config.token) {
+        document.getElementById('tokenInput').value = config.token;
+        document.getElementById('serverInput').value = config.server;
+        startApp();
+      }
+
+      // Demander permission notifications
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      // Enregistrer le service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('service-worker.js').catch(console.error);
+      }
+    });
+
+    // ===== SAUVEGARDE CONFIG =====
+    function saveConfig() {
+      const token = document.getElementById('tokenInput').value.trim();
+      const server = document.getElementById('serverInput').value.trim() || 'blynk.cloud';
+
+      if (!token) {
+        alert('⚠️ Veuillez entrer votre Auth Token Blynk');
+        return;
+      }
+
+      config.token = token;
+      config.server = server;
+      localStorage.setItem('blynk_token', token);
+      localStorage.setItem('blynk_server', server);
+
+      startApp();
+    }
+
+    function saveThresholds() {
+      config.thresholds = {
+        tempMax: parseFloat(document.getElementById('tempMax').value),
+        tempMin: parseFloat(document.getElementById('tempMin').value),
+        humMax: parseFloat(document.getElementById('humMax').value),
+        humMin: parseFloat(document.getElementById('humMin').value)
+      };
+      localStorage.setItem('thresholds', JSON.stringify(config.thresholds));
+
+      const btn = event.target;
+      const original = btn.textContent;
+      btn.textContent = '✅ Enregistré !';
+      setTimeout(() => btn.textContent = original, 1500);
+    }
+
+    // ===== DÉMARRAGE APP =====
+    function startApp() {
+      document.getElementById('setupCard').style.display = 'none';
+      document.getElementById('dataCards').style.display = 'grid';
+      document.getElementById('chartCard').style.display = 'block';
+      document.getElementById('configCard').style.display = 'block';
+
+      initChart();
+      fetchData();
+      updateInterval = setInterval(fetchData, 5000); // Rafraîchit toutes les 5 sec
+    }
+
+    // ===== RÉCUPÉRATION DONNÉES BLYNK =====
+    async function fetchData() {
+      try {
+        // API Blynk : récupère plusieurs pins en un appel
+        const url = `https://${config.server}/external/api/get?token=${config.token}&V0&V1`;
+        const response = await fetch(url);
+
+        if (!response.ok) throw new Error('Réponse non OK');
+
+        const data = await response.json();
+        const temp = parseFloat(data.V0);
+        const hum = parseFloat(data.V1);
+
+        updateUI(temp, hum);
+        setStatus(true);
+
+      } catch (error) {
+        console.error('Erreur fetch :', error);
+        setStatus(false);
+      }
+    }
+
+    // ===== MISE À JOUR INTERFACE =====
+    function updateUI(temp, hum) {
+      // Valeurs
+      document.getElementById('tempValue').textContent = temp.toFixed(1);
+      document.getElementById('humValue').textContent = hum.toFixed(1);
+
+      // Tendances
+      const now = new Date().toLocaleTimeString('fr-FR');
+      document.getElementById('tempTrend').textContent = `Dernière mesure : ${now}`;
+      document.getElementById('humTrend').textContent = `Dernière mesure : ${now}`;
+
+      // Vérification seuils
+      const t = config.thresholds;
+      const cardTemp = document.getElementById('cardTemp');
+      const cardHum = document.getElementById('cardHum');
+
+      cardTemp.classList.remove('warning', 'danger');
+      cardHum.classList.remove('warning', 'danger');
+
+      let alertMsg = null;
+
+      if (temp > t.tempMax) {
+        cardTemp.classList.add('danger');
+        alertMsg = `🔥 Température trop élevée : ${temp.toFixed(1)}°C`;
+      } else if (temp < t.tempMin) {
+        cardTemp.classList.add('danger');
+        alertMsg = `🥶 Température trop basse : ${temp.toFixed(1)}°C`;
+      } else if (temp > t.tempMax - 2 || temp < t.tempMin + 2) {
+        cardTemp.classList.add('warning');
+      }
+
+      if (hum < t.humMin) {
+        cardHum.classList.add('danger');
+        alertMsg = alertMsg || `🏜️ Humidité trop basse : ${hum.toFixed(1)}%`;
+      } else if (hum > t.humMax) {
+        cardHum.classList.add('danger');
+        alertMsg = alertMsg || `💦 Humidité trop élevée : ${hum.toFixed(1)}%`;
+      }
+
+      showAlert(alertMsg);
+
+      // Mise à jour du graphique
+      addDataPoint(temp, hum);
+    }
+
+    function showAlert(message) {
+      const banner = document.getElementById('alertBanner');
+      if (message) {
+        document.getElementById('alertMessage').textContent = message;
+        banner.classList.add('show');
+
+        // Notification système
+        if ('Notification' in window && Notification.permission === 'granted') {
+          // Éviter le spam : 1 notif toutes les 5 min max
+          const lastNotif = parseInt(localStorage.getItem('last_notif') || '0');
+          if (Date.now() - lastNotif > 5 * 60 * 1000) {
+            new Notification('🌱 Alerte Serre', { body: message, icon: '🌱' });
+            localStorage.setItem('last_notif', Date.now().toString());
+          }
+        }
+      } else {
+        banner.classList.remove('show');
+      }
+    }
+
+    function setStatus(online) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (online) {
+        dot.classList.remove('offline');
+        text.textContent = 'Connecté';
+      } else {
+        dot.classList.add('offline');
+        text.textContent = 'Hors ligne';
+      }
+    }
+
+    // ===== GRAPHIQUE =====
+    function initChart() {
+      const ctx = document.getElementById('chart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Température (°C)',
+              data: [],
+              borderColor: '#2e7d32',
+              backgroundColor: 'rgba(46, 125, 50, 0.1)',
+              tension: 0.4,
+              fill: true,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Humidité (%)',
+              data: [],
+              borderColor: '#1e88e5',
+              backgroundColor: 'rgba(30, 136, 229, 0.1)',
+              tension: 0.4,
+              fill: true,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            y: {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: '°C' }
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: '%' },
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+    }
+
+    function addDataPoint(temp, hum) {
+      const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      historyData.labels.push(time);
+      historyData.temp.push(temp);
+      historyData.hum.push(hum);
+
+      if (historyData.labels.length > MAX_POINTS) {
+        historyData.labels.shift();
+        historyData.temp.shift();
+        historyData.hum.shift();
+      }
+
+      chart.data.labels = historyData.labels;
+      chart.data.datasets[0].data = historyData.temp;
+      chart.data.datasets[1].data = historyData.hum;
+      chart.update('none');
+    }
+
+    // ===== PWA INSTALL =====
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('installBtn').classList.add('show');
+    });
+
+    function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          deferredPrompt = null;
+          document.getElementById('installBtn').classList.remove('show');
+        });
+      }
+    }
+  </script>
+</body>
+</html>
